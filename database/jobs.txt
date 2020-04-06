@@ -1,0 +1,32 @@
+Your job 29251 ("JOBNAME") has been submitted
+Your job 29252 ("JOBNAME") has been submitted
+Your job 29253 ("JOBNAME") has been submitted
+Your job 29254 ("JOBNAME") has been submitted
+Your job 29255 ("JOBNAME") has been submitted
+Your job 29256 ("JOBNAME") has been submitted
+Your job 29257 ("JOBNAME") has been submitted
+Your job 29261 ("JOBNAME") has been submitted
+Your job 29262 ("JOBNAME") has been submitted
+Your job 29263 ("JOBNAME") has been submitted
+Your job 29264 ("JOBNAME") has been submitted
+Your job 29265 ("JOBNAME") has been submitted
+Your job 29266 ("JOBNAME") has been submitted
+Your job 29267 ("JOBNAME") has been submitted
+Al2Cu | 29276Al2Cu | 29290Al32Cu16 | 29291Al2Cu | 29292
+Al32Cu16 | 29293
+Ni24H | 29511
+Ni | 29528
+Ni | 29530
+Ni24 | 29531
+Ni | 29558
+Ni | 29559
+Ni24 | 29560
+Al2Cu | 29561
+Al32Cu16 | 29562
+Ni | 29563
+Ni24 | 29564
+Cu24 | 29565
+Al | 29566
+Al24 | 29567
+Al2Cu | 29587
+Al32Cu16 | 29588

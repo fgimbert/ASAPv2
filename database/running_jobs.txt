@@ -1,0 +1,10 @@
+     Al2Cu |       bulk |      29593
+  Al32Cu16 |       slab |      29594
+        Ni |       bulk |      29600
+      Ni24 |       slab |      29601
+     Ni24H |       None |      29657
+     Ni24H |    surface |      29659
+     Ni24H |    surface |      29660
+     Ni24H |    surface |      29661
+     Ni24H |    surface |      29662
+ Al32Cu16H |    surface |      29760
