@@ -50,7 +50,7 @@ from ipyfilechooser import FileChooser
 viewer = 'ngl'
 
 import importlib
-from src import optimizer_module, remote_module, viewer_mod, search_module, builder_module, vasp_module, data_module, qe_module
+from src import optimizer_module, remote_module, viewer_mod, search_module, builder_module, vasp_module, data_module, qe_module, np_module
 
 # Change in mymodule
 importlib.reload(search_module)
@@ -61,6 +61,7 @@ importlib.reload(vasp_module)
 importlib.reload(data_module)
 importlib.reload(viewer_mod)
 importlib.reload(qe_module)
+importlib.reload(np_module)
 
 
 __author__ = "Florian Gimbert"
@@ -109,6 +110,7 @@ class GUI(object):
 
         self.search_menu = search_module.Search(MAPI_KEY=self.MAPI_KEY)
         self.builder = builder_module.Builder(MAPI_KEY=self.MAPI_KEY)
+        self.nanoparticle = np_module.Nanoparticle(MAPI_KEY=self.MAPI_KEY)
         self.optimizer = optimizer_module.Optimizer(MAPI_KEY=self.MAPI_KEY)
         self.remote = remote_module.Remote()
         self.vaspconfig = vasp_module.configVASP(MAPI_KEY=self.MAPI_KEY, VASP_PP_PATH=self.VASP_PP_PATH)
@@ -136,6 +138,8 @@ class GUI(object):
         self.builder.adsorbate_button.on_click(self.add_adsorbate_clicked)
         self.builder.molad_button.on_click(self.checkmol_clicked)
 
+        self.nanoparticle.nanoparticle_button.on_click(self.nanoparticle_clicked)
+
         self.optimizer.runopt_button.on_click(self.runopt_clicked)
         # self.optimizer.testopt_button.on_click(self.testopt_clicked)
 
@@ -160,6 +164,12 @@ class GUI(object):
 
         self.building_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
                                                               height='320px', overflow_y='auto'))
+
+        self.nanopart_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
+                                                              height='320px', overflow_y='auto'))
+
+        self.aimd_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
+                                                              height='320px', overflow_y='auto'))                                     
         self.slab_panel = ipywidgets.Output(layout=Layout(width='60%', height='270px', overflow_y='auto'))
         self.sites_panel = ipywidgets.Output(layout=Layout(width='40%', border='solid 1px',
                                                            height='300px', overflow_y='auto'))
@@ -235,10 +245,12 @@ class GUI(object):
         self.input_tab = widgets.VBox([self.input_panel,self.structure_panel])
         self.import_tab = widgets.VBox([self.import_panel])
 
-        tab_contents = [self.building_tab, self.adsorbate_tab, self.optimizer_tab, self.jobs_tab,
-                        self.data_tab]
-        tab_name = ['1. Create Slab', '2. Add Adsorbate', '3. Optimize Structure', 'Current Jobs',
-                    'Database']
+        
+
+        # Tabs for Sla optimization
+
+        tab_contents = [self.building_tab, self.adsorbate_tab, self.optimizer_tab]
+        tab_name = ['1. Create Slab', '2. Add Adsorbate', '3. Optimize Structure']
 
         children = [content for content in tab_contents]
 
@@ -248,7 +260,23 @@ class GUI(object):
         for i in range(len(children)):
             self.tab.set_title(i, tab_name[i])
 
-        menu_tab = [self.input_tab,self.import_tab, self.config_tab]
+
+        # Tabs for Materials Informatics Tools
+
+        self.slabopt_tab = widgets.VBox([self.tab])
+        self.aimd_tab = widgets.VBox([self.aimd_panel])
+        self.nanopart_tab = widgets.VBox([self.nanopart_panel])
+
+        miprocess_tabs = [self.slabopt_tab, self.nanopart_tab, self.aimd_tab, self.jobs_tab, self.data_tab]
+        miprocess_name = ['Slab Optimization', 'Nanoparticles', 'AIMD', 'Current Jobs', 'Database']
+        children = [content for content in miprocess_tabs]
+
+        self.miprocess_tab = widgets.Tab()
+        self.miprocess_tab.children = children
+        for i in range(len(children)):
+            self.miprocess_tab.set_title(i, miprocess_name[i])
+
+        menu_tab = [self.input_tab, self.import_tab, self.config_tab]
         menu_name = ['Search Materials', "Import Structure", 'Configuration']
         self.menu = widgets.Tab()
         menu_children = [content for content in menu_tab]
@@ -256,7 +284,7 @@ class GUI(object):
         for i in range(len(menu_children)):
             self.menu.set_title(i, menu_name[i])
 
-        text_search = '1. Search Material:'
+        text_search = '1. Creation Materials Tools:'
         searchWidget = widgets.HTML(value=f"<b><font color='red'>{text_search}</b>")
 
         self.display_input_panel()
@@ -277,12 +305,17 @@ class GUI(object):
 
             display(results_box)
         
-        text_building = '2. Building Surface:'
+        text_building = '2. Materials Informatics Tools:'
         buildingWidget = widgets.HTML(value=f"<b><font color='red'>{text_building}</b>")
         
         self.display_building_panel()
         self.display_adsorbate_panel()
+
+        self.display_nanopart_panel()
+        self.display_aimd_panel()
+
         self.display_optimizer_panel()
+
         self.display_config_panel()
         self.display_data_panel()
         self.display_jobs_panel()
@@ -344,7 +377,7 @@ class GUI(object):
         display(widgets.VBox([searchWidget,
                               self.menu,
                               buildingWidget, 
-                              self.tab,
+                              self.miprocess_tab,
                               # optimizationWidget,
                               # self.optimization_panel,
                               outputWidget, 
@@ -599,6 +632,34 @@ class GUI(object):
                                       self.builder.molad_dropdown]))
 
             display(widgets.HBox([self.molecules_panel, self.adsorb_panel]))
+
+    def display_nanopart_panel(self):
+
+        with self.nanopart_panel:
+            text_aimd = 'Module for nanoparticles creations (in work)'
+            aimdWidget = widgets.HTML(value=f"<b><font color='red'>{text_aimd}</b>")
+
+            input_nanoparticle = widgets.VBox([self.nanoparticle.rmax_text, 
+                                                self.nanoparticle.surface_families_text, 
+                                                self.nanoparticle.surface_energies_text,
+                                                self.nanoparticle.nanoparticle_button])
+
+            input_box = widgets.VBox([aimdWidget,
+                                        input_nanoparticle])
+
+            display(input_box)
+            
+            #slabWidgets = widgets.VBox([self.tab])
+            #display(aimdWidget)
+
+    def display_aimd_panel(self):
+
+        with self.aimd_panel:
+            text_aimd = 'Module for optimized AIMD calculations (in work)'
+            aimdWidget = widgets.HTML(value=f"<b><font color='red'>{text_aimd}</b>")
+            #slabWidgets = widgets.VBox([self.tab])
+            display(aimdWidget)
+
 
     def display_optimizer_panel(self):
         """Display the optimizer panel for Optimizer Module"""
@@ -976,6 +1037,28 @@ class GUI(object):
             print(len(self.all_slabs))
             # print(b.value[1])
             # print(b.value[2])
+
+    def nanoparticle_clicked(self, b):
+
+        mp_id = str(self.search_menu.search_select.value.split()[0])
+
+        self.np_atoms = self.nanoparticle.create_nanoparticle(mp_id)
+
+        b.value = [self.np_atoms]
+
+        self.__display_button.value = ['Nanoparticle',  self.np_atoms]
+
+        with self.error_panel:
+            clear_output()
+            print('Nanoparticle Clicked !')
+            print(mp_id)
+            print(self.np_atoms)
+            print(self.nanoparticle.list_energies)
+            print(self.nanoparticle.list_families)
+            print(self.__display_button.value)
+
+
+
 
     def slab_clicked(self, b):
 
@@ -1902,6 +1985,23 @@ class GUI(object):
                 dos_plotter = DosPlotter()
                 dos_plotter.add_dos_dict(dos.get_spd_dos())
                 dos_plotter.show()
+
+            elif self.__display_button.value[0] == 'Nanoparticle':
+
+                atoms = self.np_atoms
+
+                try:
+                    display(viewer_mod.view_ngl(atoms))
+                except:
+                    display(view(atoms, viewer='x3d'))
+
+
+                self.__savecif_button.value = atoms
+                self.__savecif_button.disabled = False
+                self.__savecif_button.button_style = 'success'
+                self.__saveposcar_button.disabled = False
+                self.__saveposcar_button.button_style = 'success'
+
 
             elif self.__display_button.value[0] == 'Slab':
                 
