@@ -50,7 +50,7 @@ from ipyfilechooser import FileChooser
 viewer = 'ngl'
 
 import importlib
-from src import optimizer_module, remote_module, viewer_mod, search_module, builder_module, vasp_module, data_module, qe_module, np_module
+from src import optimizer_module, remote_module, viewer_mod, search_module, builder_module, vasp_module, data_module, qe_module, np_module, aimd_module, optmd_module
 
 # Change in mymodule
 importlib.reload(search_module)
@@ -62,6 +62,8 @@ importlib.reload(data_module)
 importlib.reload(viewer_mod)
 importlib.reload(qe_module)
 importlib.reload(np_module)
+importlib.reload(aimd_module)
+importlib.reload(optmd_module)
 
 
 __author__ = "Florian Gimbert"
@@ -111,6 +113,9 @@ class GUI(object):
         self.search_menu = search_module.Search(MAPI_KEY=self.MAPI_KEY)
         self.builder = builder_module.Builder(MAPI_KEY=self.MAPI_KEY)
         self.nanoparticle = np_module.Nanoparticle(MAPI_KEY=self.MAPI_KEY)
+        self.aimd = aimd_module.AIMD(MAPI_KEY=self.MAPI_KEY, VASP_PP_PATH=self.VASP_PP_PATH, ESPRESSO_PSEUDO=self.ESPRESSO_PSEUDO)
+        self.optmd = optmd_module.OptMD(MAPI_KEY=self.MAPI_KEY, VASP_PP_PATH=self.VASP_PP_PATH, ESPRESSO_PSEUDO=self.ESPRESSO_PSEUDO)
+
         self.optimizer = optimizer_module.Optimizer(MAPI_KEY=self.MAPI_KEY)
         self.remote = remote_module.Remote()
         self.vaspconfig = vasp_module.configVASP(MAPI_KEY=self.MAPI_KEY, VASP_PP_PATH=self.VASP_PP_PATH)
@@ -139,6 +144,10 @@ class GUI(object):
         self.builder.molad_button.on_click(self.checkmol_clicked)
 
         self.nanoparticle.nanoparticle_button.on_click(self.nanoparticle_clicked)
+
+        self.aimd.rundft_button.on_click(self.rundft_clicked)
+        self.optmd.runoptmd_button.on_click(self.runoptmd_clicked)
+
 
         self.optimizer.runopt_button.on_click(self.runopt_clicked)
         # self.optimizer.testopt_button.on_click(self.testopt_clicked)
@@ -169,7 +178,10 @@ class GUI(object):
                                                               height='320px', overflow_y='auto'))
 
         self.aimd_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
-                                                              height='320px', overflow_y='auto'))                                     
+                                                              height='320px', overflow_y='auto'))  
+        self.optmd_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
+                                                              height='320px', overflow_y='auto')) 
+
         self.slab_panel = ipywidgets.Output(layout=Layout(width='60%', height='270px', overflow_y='auto'))
         self.sites_panel = ipywidgets.Output(layout=Layout(width='40%', border='solid 1px',
                                                            height='300px', overflow_y='auto'))
@@ -265,10 +277,11 @@ class GUI(object):
 
         self.slabopt_tab = widgets.VBox([self.tab])
         self.aimd_tab = widgets.VBox([self.aimd_panel])
+        self.optmd_tab = widgets.VBox([self.optmd_panel])
         self.nanopart_tab = widgets.VBox([self.nanopart_panel])
 
-        miprocess_tabs = [self.slabopt_tab, self.nanopart_tab, self.aimd_tab, self.jobs_tab, self.data_tab]
-        miprocess_name = ['Slab Optimization', 'Nanoparticles', 'AIMD', 'Current Jobs', 'Database']
+        miprocess_tabs = [self.slabopt_tab, self.nanopart_tab, self.aimd_tab, self.optmd_tab, self.jobs_tab, self.data_tab]
+        miprocess_name = ['Slab Optimization', 'Nanoparticles', 'AIMD', 'On-the-fly MD', 'Current Jobs', 'Database']
         children = [content for content in miprocess_tabs]
 
         self.miprocess_tab = widgets.Tab()
@@ -313,7 +326,7 @@ class GUI(object):
 
         self.display_nanopart_panel()
         self.display_aimd_panel()
-
+        self.display_optmd_panel()
         self.display_optimizer_panel()
 
         self.display_config_panel()
@@ -404,7 +417,7 @@ class GUI(object):
         """Build the Upload CIF button widget."""
 
 
-        self.__uploadcif_button = LoadedButton(description='Display CIF', value=None, disabled=False, button_style='warning')
+        self.__uploadcif_button = LoadedButton(description='Display Structure', value=None, disabled=False, button_style='warning')
         
         # update function
         self.__uploadcif_button.on_click(self.uploadcif_clicked)
@@ -475,7 +488,7 @@ class GUI(object):
 
         self.ciffile = self.__selectcif_button.selected
 
-        self.__display_button.value = ['CIF file',  self.ciffile]
+        self.__display_button.value = ['Input file',  self.ciffile]
         
         with self.error_panel:
             clear_output()
@@ -637,14 +650,14 @@ class GUI(object):
 
         with self.nanopart_panel:
             text_aimd = 'Module for nanoparticles creations (in work)'
-            aimdWidget = widgets.HTML(value=f"<b><font color='red'>{text_aimd}</b>")
+            nanopartWidget = widgets.HTML(value=f"<b><font color='red'>{text_aimd}</b>")
 
             input_nanoparticle = widgets.VBox([self.nanoparticle.rmax_text, 
                                                 self.nanoparticle.surface_families_text, 
                                                 self.nanoparticle.surface_energies_text,
                                                 self.nanoparticle.nanoparticle_button])
 
-            input_box = widgets.VBox([aimdWidget,
+            input_box = widgets.VBox([nanopartWidget,
                                         input_nanoparticle])
 
             display(input_box)
@@ -655,11 +668,42 @@ class GUI(object):
     def display_aimd_panel(self):
 
         with self.aimd_panel:
-            text_aimd = 'Module for optimized AIMD calculations (in work)'
+            text_aimd = 'Module for single DFT calculations (in work)'
             aimdWidget = widgets.HTML(value=f"<b><font color='red'>{text_aimd}</b>")
-            #slabWidgets = widgets.VBox([self.tab])
-            display(aimdWidget)
 
+            input_aimd = widgets.VBox([self.aimd.vasppp_text, 
+                                                self.aimd.vasprun_text,
+                                                self.aimd.workdir_text,
+                                                self.aimd.ncpus_text,
+                                                self.aimd.rundft_button
+                                                ])
+
+
+
+            input_box = widgets.VBox([aimdWidget,
+                                        input_aimd])
+            #slabWidgets = widgets.VBox([self.tab])
+            display(input_box)
+
+    def display_optmd_panel(self):
+
+        with self.optmd_panel:
+            text_optmd = 'Module for on-the-fly optimized AIMD calculations (in work)'
+            optmdWidget = widgets.HTML(value=f"<b><font color='red'>{text_optmd}</b>")
+
+            input_optmd = widgets.VBox([self.optmd.vasppp_text, 
+                                                self.optmd.vasprun_text,
+                                                self.optmd.workdir_text,
+                                                self.optmd.ncpus_text,
+                                                self.optmd.runoptmd_button
+                                                ])
+
+
+
+            input_box = widgets.VBox([optmdWidget,
+                                        input_optmd])
+            #slabWidgets = widgets.VBox([self.tab])
+            display(input_box)
 
     def display_optimizer_panel(self):
         """Display the optimizer panel for Optimizer Module"""
@@ -693,7 +737,7 @@ class GUI(object):
 
         with self.import_panel:
 
-            upload_text = "Upload CIF file"
+            upload_text = "Upload Structure file"
             uploadWidget = widgets.HTML(value=f"<b><font color='black'>{upload_text}</b>")
 
             selectBox = widgets.HBox([self.__selectcif_button, self.__uploadcif_button])
@@ -1058,7 +1102,15 @@ class GUI(object):
             print(self.__display_button.value)
 
 
+    def rundft_clicked(self, b):
+        print('Bonjour')
 
+        self.aimd.rundft_action(self.__display_button.value, self.remote.password, self.remote.passphrase)
+
+    def runoptmd_clicked(self, b):
+        print('Bonjour')
+
+        self.optmd.runoptmd_action(self.__display_button.value, self.remote.password, self.remote.passphrase)
 
     def slab_clicked(self, b):
 
@@ -1907,10 +1959,10 @@ class GUI(object):
                 plotterpd = PDPlotter(pd)   
                 plotterpd.show()   
             
-            elif self.__display_button.value[0] == 'CIF file':
+            elif self.__display_button.value[0] == 'Input file':
                 # structure_ase = atoms
                 #atoms = Atoms('CO', positions=[(0, 0, 0), (0, 0, 1.1)])
-                atoms = read(self.__display_button.value[1], format="cif")
+                atoms = read(self.__display_button.value[1])
                 try:
                     display(viewer_mod.view_ngl(atoms))
                 except:

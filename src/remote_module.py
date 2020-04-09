@@ -405,7 +405,7 @@ class Remote(object):
         with paramiko.SSHClient() as client:
             client.load_system_host_keys()
             client.set_missing_host_key_policy(paramiko.WarningPolicy())
-            client.connect(host, **kwargs)
+            client.connect(host, timeout=30, **kwargs)
 
             with SCPClient(client.get_transport()) as scp:
                 scp.put(files, recursive=True, remote_path=path)
@@ -454,6 +454,26 @@ class Remote(object):
                 scp.get(remote_path=remote_path, recursive=False, local_path=local_path)
 
         return
+
+    def execute_command(self, command='ls', path=None, host=None, kwargs=None):
+        """
+        Put local files (input files, job submit file and shell scripts) to remote working directory
+        """
+        if path is None:
+            path = self.workdir
+        if host is None:
+            host = self.host
+        if kwargs is None:
+            kwargs = self.kwargs
+
+        with paramiko.SSHClient() as client:
+            client.load_system_host_keys()
+            client.set_missing_host_key_policy(paramiko.WarningPolicy())
+
+            client.connect(host, **kwargs)
+            stdin, stdout, stderr = client.exec_command("cd {0}/; {1}".format(path, command))
+            errs = stderr.read().decode('utf-8')
+
 
     def create_workdir(self, path=None, host=None, kwargs=None):
         """
