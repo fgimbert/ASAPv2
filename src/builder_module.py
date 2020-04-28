@@ -5,6 +5,8 @@ from ipywidgets import Layout
 import numpy as np
 from ase import Atoms
 
+from ipyfilechooser import FileChooser
+
 from pymatgen import MPRester, Composition, Element, Molecule
 from pymatgen.entries.compatibility import MaterialsProjectCompatibility
 # Import the neccesary tools to generate surfaces
@@ -58,6 +60,8 @@ class Builder(object):
         self.__create_adatom_radio()
         self.__create_adatom_text()
         self.__create_molad_button()
+        self.__create_importmol_button()
+        self.__create_uploadmol_button()
         self.__create_molad_dropdown()
         
         self.__create_adsorbate_button()
@@ -177,9 +181,9 @@ class Builder(object):
 
     def __create_adatom_radio(self):
         """Build the Radio widget for display outputs."""
-        self.adatom_radio = widgets.RadioButtons(options=['Atom', 'Molecule'],
+        self.adatom_radio = widgets.RadioButtons(options=['Atom', 'Molecule', 'Import Molecule'],
                                                  value=None,
-                                                 layout=Layout(width='100px'),
+                                                 layout=Layout(width='150px'),
                                                  disabled=False)
         
     def __create_adatom_text(self):
@@ -189,6 +193,19 @@ class Builder(object):
                                         placeholder='H, H2O, C60, ...',
                                         layout=Layout(width='150px'),
                                         style={'description_width': 'initial'})
+
+    def __create_importmol_button(self):
+        """Build the Upload CIF button widget."""
+        self.importmol = FileChooser()
+        # update function
+        #self.uploadcif_button.on_click(self.uploadcif_clicked)
+    
+    def __create_uploadmol_button(self):
+        """Build the Upload CIF button widget."""
+
+        self.uploadmol_button = LoadedButton(description='Upload Molecule', value=None, disabled=True, button_style='warning')
+        
+        # update function
 
     def __create_molad_button(self):
         """Build the button widget to check Molecule."""
@@ -211,6 +228,7 @@ class Builder(object):
         
         if self.adatom_radio.value == 'Atom':
             self.molad_button.disabled = True
+            self.uploadmol_button.disabled = True
             self.adatom_text.value = 'H'
             self.adatom_text.placeholder = 'H, O, Au, ...'
             self.alpha_slider.disabled = True
@@ -219,14 +237,19 @@ class Builder(object):
             
         elif self.adatom_radio.value == 'Molecule':
             self.molad_button.disabled = False
+            self.uploadmol_button.disabled = True
             self.adatom_text.value = 'H2O'
             self.adatom_text.placeholder = 'H2O, C60, ...'
             self.alpha_slider.disabled = False
             self.beta_slider.disabled = False
             self.gamma_slider.disabled = False
+        elif self.adatom_radio.value == 'Import Molecule':
+            self.molad_button.disabled = True
+            self.uploadmol_button.disabled = False
             
         else:
             self.molad_button.disabled = True
+            self.uploadmol_button.disabled = True
             self.adatom_text.value = None
             self.adatom_text.placeholder = 'H, H2O, C60, ...'
 
@@ -487,12 +510,17 @@ class Builder(object):
         
         return structure
 
-    def add_adsorbate_mol(self, molecule, h=None, x=None, y=None, alpha=None, beta=None, gamma=None):
+    def add_adsorbate_mol(self, molecule, slab=None, h=None, x=None, y=None, alpha=None, beta=None, gamma=None):
 
         from ase.build import add_adsorbate
         
-        structure = self.slab_button.value[0]
-        self.ads_slab = AseAtomsAdaptor.get_atoms(structure)
+        if slab is None:
+
+            structure = self.slab_button.value[0]
+            self.ads_slab = AseAtomsAdaptor.get_atoms(structure)
+        else: 
+            self.ads_slab = slab
+
         cell = self.ads_slab.get_cell()
         
         # molecule = Atoms(molecule, positions=[(0., 0., 0.)])

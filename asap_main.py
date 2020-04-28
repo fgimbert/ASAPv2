@@ -100,6 +100,7 @@ class GUI(object):
         self.emin = None
         self.slabmin = None
         self.domain = []
+        self.molecule_imported = None
 
         self.mpid = None # The mpid for the surface material - not used now
         self.current_structure = None # The structure (bulk or slab) displayed
@@ -142,6 +143,8 @@ class GUI(object):
         self.builder.sernergy_button.on_click(self.surfacenergy_clicked)
         self.builder.adsorbate_button.on_click(self.add_adsorbate_clicked)
         self.builder.molad_button.on_click(self.checkmol_clicked)
+        self.builder.uploadmol_button.on_click(self.uploadmol_clicked)
+
 
         self.nanoparticle.nanoparticle_button.on_click(self.nanoparticle_clicked)
 
@@ -172,7 +175,7 @@ class GUI(object):
                                                             height='250px', overflow_y='auto'))
 
         self.building_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
-                                                              height='320px', overflow_y='auto'))
+                                                              height='350px', overflow_y='auto'))
 
         self.nanopart_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
                                                               height='320px', overflow_y='auto'))
@@ -187,9 +190,9 @@ class GUI(object):
                                                            height='300px', overflow_y='auto'))
 
         self.adsorbate_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
-                                                               height='320px', overflow_y='auto'))
+                                                               height='350px', overflow_y='auto'))
         self.optimization_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
-                                                                  height='320px', overflow_y='auto'))
+                                                                  height='350px', overflow_y='auto'))
 
         self.config_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px',
                                                             height='750px', overflow_y='auto'))
@@ -242,7 +245,7 @@ class GUI(object):
         
         self.error_panel = ipywidgets.Output(layout=Layout(width='99%', border='solid 1px', height='100px',
                                                            overflow_y='auto'))
-        self.molecules_panel = ipywidgets.Output(layout=Layout(width='60%', height='270px', overflow_y='auto'))
+        self.molecules_panel = ipywidgets.Output(layout=Layout(width='60%', height='300px', overflow_y='auto'))
         self.adsorb_panel = ipywidgets.Output(layout=Layout(width='40%', border='solid 1px', height='300px',
                                                             overflow_y='auto'))
         
@@ -377,6 +380,7 @@ class GUI(object):
         self.search_menu.viewer_radio.observe(self.update_display_button, 'value') 
 
         self.__uploadcif_button.observe(self.update_display_button, 'value')
+        self.builder.uploadmol_button.observe(self.update_display_button, 'value')
 
         self.__display_button.observe(self.update_output_panel, 'value')
         # self.__display_button.observe(self.update_sites_panel, 'value')
@@ -623,11 +627,14 @@ class GUI(object):
                 # input_label = widgets.Label(value = r'\(\color{red} {' + text  + '}\)')
                 adatomText = widgets.HTML(value=f"<b><font color='black'>{text_adatom}</b>")
                 
+                uploadMol = widgets.HBox([self.builder.adatom_text, self.builder.molad_button])
+
                 atomWidget = widgets.HBox([self.builder.adatom_radio, 
-                                           self.builder.adatom_text, self.builder.molad_button])
+                                           uploadMol])
 
                 display(widgets.VBox([adatomText, 
                                       atomWidget,
+                                       widgets.HBox([self.builder.importmol, self.builder.uploadmol_button]),
                                       self.builder.sites_dropdown,
                                       widgets.HBox([self.builder.height_slider,
                                                     widgets.VBox([ self.builder.alpha_slider,
@@ -1176,6 +1183,31 @@ class GUI(object):
             
             # print(self.builder.ads_sites['all'][0])
             # print(self.builder.ads_sites['all'][1])
+
+
+
+    def uploadmol_clicked(self, b):
+
+        self.molecule_imported = self.builder.importmol.selected
+
+        if self.__display_button.value is None:
+            self.slab_built =  self.__display_button.value
+        elif self.__display_button.value[0] == 'Slab':
+            self.slab_built =  self.__display_button.value
+
+        self.__display_button.value = ['Molecule',  self.molecule_imported]
+
+        self.builder.adsorbate_button.disabled = False
+        self.builder.adsorbate_button.style.button_color = 'lightgreen'
+
+        with self.error_panel:
+            clear_output()
+            print('Mol Upload Clicked !')
+            print(self.__display_button.value)
+            print( self.slab_built)
+
+
+
 
     def checkmol_clicked(self, b):
         
@@ -1831,8 +1863,11 @@ class GUI(object):
             self.runopt_vasp()
 
     def add_adsorbate_clicked(self, b):
-        
-        slab = AseAtomsAdaptor.get_atoms(self.builder.slab_button.value[0])
+
+        if self.builder.slab_button.value[0] == "Molecule":
+            slab = self.slab_built
+        else:
+            slab = AseAtomsAdaptor.get_atoms(self.builder.slab_button.value[0])
             
         if self.builder.adatom_radio.value == 'Atom':
             # Adsorbate is an atom
@@ -1843,7 +1878,7 @@ class GUI(object):
             b.value = self.builder.add_adsorbate_ase()
             self.current_structure = b.value
 
-        else:
+        elif self.builder.adatom_radio.value == 'Molecule':
             # Adsorbate is a molecule
             
             self.optimizer.parameters_select.options = ['x', 'y', 'h', 'alpha', 'beta', 'gamma']
@@ -1862,6 +1897,28 @@ class GUI(object):
             # print(AseAtomsAdaptor.get_atoms(molecule))
             b.value = self.builder.add_adsorbate_mol(atoms)
             self.current_structure = b.value
+
+        elif self.builder.adatom_radio.value == 'Import Molecule':
+            # Adsorbate is an imported molecule
+
+            self.optimizer.parameters_select.options = ['x', 'y', 'h', 'alpha', 'beta', 'gamma']
+            self.optimizer.parameters_select.values = ['x', 'y', 'h', 'alpha', 'beta', 'gamma']
+
+            #from ase.build import molecule
+            #atoms = self.molecule_imported
+            atoms = read(self.molecule_imported)
+
+            with self.error_panel:
+                clear_output()
+                print('Adsorbate Clicked !')
+
+                print('{0} adsorbate for {1}'.format(atoms,
+                                                     str(self.search_menu.search_select.value.split()[0])))
+           
+            # print(AseAtomsAdaptor.get_atoms(molecule))
+            b.value = self.builder.add_adsorbate_mol(atoms, slab=slab)
+            self.current_structure = b.value
+
 
         self.__display_button.value = ['Adsorbate',
                                        self.search_menu.structure.value,
@@ -2037,6 +2094,14 @@ class GUI(object):
                 dos_plotter = DosPlotter()
                 dos_plotter.add_dos_dict(dos.get_spd_dos())
                 dos_plotter.show()
+
+            elif self.__display_button.value[0] == 'Molecule':
+
+                atoms = read(self.__display_button.value[1])
+                try:
+                    display(viewer_mod.view_ngl(atoms))
+                except:
+                    display(view(structure_ase, viewer='x3d'))
 
             elif self.__display_button.value[0] == 'Nanoparticle':
 
