@@ -98,6 +98,9 @@ class GUI(object):
            ---------
 
         """
+
+        self.client = MongoClient("mongodb+srv://fgimbert:Ph1s1que@cluster0-cysy3.gcp.mongodb.net/test?retryWrites=true&w=majority")
+
         self.MAPI_KEY = MAPI_KEY
         self.VASP_PP_PATH = VASP_PP_PATH
         self.ESPRESSO_PSEUDO = ESPRESSO_PSEUDO
@@ -1636,31 +1639,38 @@ class GUI(object):
 
         boids = {}
 
-        if os.path.isfile('../asapdata/boids.json'):
+        dblist = self.client.list_database_names()
+        if "ASAP" in dblist:
+            print("The ASAP database exists.")
+            db = self.client["ASAP"]
+            dbboids = db['boids']
+        else:
+            print('No ASAP database')
+            db = client["ASAP"]
+            dbboids = db['boids']
 
-            with open('../asapdata/boids.json', mode='r', encoding='utf-8') as fd:
-                json_file = json.load(fd)
-                boids = json_file
+        len_boids = dbboids.count_documents({})
+        print('Len boids : ', len_boids)
 
-                max_key = 0
-                for key in list(boids.keys()):
-                    if int(key[4:]) > max_key:
-                        max_key = int(key[4:])
+        if len_boids > 0:
 
-                boid = max_key + 1
-                workdir = 'boid' + str(boid)
-                boids[workdir] = {'system': workdirsystem, 'pid': None, 'status': 'running', 'step': -1}
+            boid = len_boids
+            workdir = 'boid' + str(len_boids)
 
-            with open('../asapdata/boids.json', mode='w', encoding='utf-8') as fp:
-                json.dump(boids, fp)
+
+            new_boid = {'boid':workdir, 'system': workdirsystem, 'pid': None, 'status': 'running', 'step': -1, 'code':self.calc_buttons.value}
+            dbboids.insert(new_boid)
+
 
         else:
             boid = 0
             workdir = 'boid' + str(boid)
-            boids[workdir] = {'system': workdirsystem, 'pid': None, 'status': 'running', 'step': -1}
+            new_boid = {'boid':workdir, 'system': workdirsystem, 'pid': None, 'status': 'running', 'step': -1, 'code':self.calc_buttons.value}
 
-            with open('../asapdata/boids.json', mode='w', encoding='utf-8') as fp:
-                json.dump(boids, fp)
+            db = self.client["ASAP"]
+            dbboids = db['boids']
+            dbboids.insert(new_boid)
+
 
         local_workdir = '../asapdata/' + workdir
         os.makedirs(local_workdir + '/vasp/', exist_ok=True)
@@ -1735,49 +1745,61 @@ class GUI(object):
 
                     print(cmd)
                     p = subprocess.Popen(cmd, shell=True)
-                    # print(p.pid)
 
-                    boids = {}
-
-                    with open('../asapdata/boids.json', mode='r', encoding='utf-8') as fd:
-                        json_file = json.load(fd)
-                        boids = json_file
-
-                        boids[workdir]['pid'] = p.pid
-
-                    with open('../asapdata/boids.json', mode='w', encoding='utf-8') as fp:
-                        json.dump(boids, fp)
+                    from pprint import pprint
+                    #newbo = dbboids.find_one({"boid": workdir})
+                    #dbboids.update({ _id: newbo.get('_id') },{$set: {pid: p.pid}})
+                    newbo = dbboids.find_one({"boid": workdir})
+                    dbboids.update_one({ '_id': newbo.get('_id') }, {"$set": {"pid":  p.pid}})
 
                     print('Bayesian optimization running with id {0}'.format(workdir))
+
                 else:
+
+                    self.remote.create_workdir(path='ASAP/BOCALC/'+self.workdir)
                     
                     print('Run Bayesian Optimization on cluster')
 
+                    cmd = 'python src/bayesopt.py'
 
-                    self.remote.create_workdir(path='ASAP/BOCALC/'+workdir)
+                    maxbo = str(self.optimizer.maxbo_slider.value)
+                    initbo = str(self.optimizer.initbo_slider.value)
 
-                    print('Create boid{0} online'.format(workdir))
+
+                    if self.remote.password is None and self.remote.passphrase is not None:
+                        cmd = 'python src/bayesopt.py' + ' --passphrase ' + self.remote.passphrase \
+                            + ' --workdir ' + workdir + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads \
+                            + ' --y ' + yads
+                    elif self.remote.password is not None and self.remote.passphrase is None:
+                        cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + ' --workdir ' + workdir \
+                            + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
+                    elif self.remote.password is not None and self.remote.passphrase is not None:
+                        cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + \
+                            ' --passphrase ' + self.remote.passphrase + ' --workdir ' + workdir + ' --maxbo ' + maxbo \
+                            + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
+
+                    print(cmd)
+
                     
-                    client = MongoClient("mongodb+srv://fgimbert:Ph1s1que@cluster0-cysy3.gcp.mongodb.net/test?retryWrites=true&w=majority")
-                    dblist = client.list_database_names()
+                    dblist = self.client.list_database_names()
                     if "ASAP" in dblist:
                         print("The ASAP database exists.")
-                        db = client["ASAP"]
+                        db = self.client["ASAP"]
                         collection = db['boids']
 
                         #import pprint
-                        print(collection.find_one({"boid": "boid10"}))
+                        print(collection.find_one({"boid": "boid20"}))
 
                         #new_boids = {'boid':boid, 'system':boids[boid]['system'], 'status':boids[boid]['status'],'pid':boids[boid]['pid'], 'step':boids[boid]['step']}
 
-                        newbo = collection.find_one({"boid": "boid10"})
-                        collection.update_one({ '_id': newbo.get('_id') }, {"$set": {"pid": "Bonjour"}})
-                        print(collection.find_one({"boid": "boid10"}))
+                        #newbo = dbboids.find_one({"boid": "boid0"})
+                        #dbboids.update({ _id: newbo.get('_id') },{$set: {pid:' Bonjour'}})
+
+                        newbo = dbboids.find_one({"boid": "boid10"})
+                        dbboids.update_one({ '_id': newbo.get('_id') }, {"$set": {"pid": "Bonjour"}})
 
                         #print(collection['boid0']['system'])
-
-
-                        
+ 
                     else:
 
                         print('No dbtest database')
