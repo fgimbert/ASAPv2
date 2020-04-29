@@ -720,6 +720,7 @@ class GUI(object):
             with self.inputopt_panel:
 
                 calcWidgets = widgets.VBox([# self.optimizer.inputvasp_button,
+                                            self.optimizer.usedb_checkbox,
                                             self.optimizer.runcalc_button,
                                             self.optimizer.runopt_button,
                                             #self.optimizer.testopt_button
@@ -1702,42 +1703,53 @@ class GUI(object):
                 shutil.copy2('input_vasp/submit_file.sh', local_workdir+'/vasp')  # complete target filename given
 
                 import subprocess
-                print('Run outside process')
-                print(os.getcwd())
-                cmd = 'python src/bayesopt.py'
 
-                maxbo = str(self.optimizer.maxbo_slider.value)
-                initbo = str(self.optimizer.initbo_slider.value)
+                print()
+
+                if not self.optimizer.usedb_checkbox.value :
+                    print('Run Bayesian Optimization locally')
+                    print(os.getcwd())
+                    cmd = 'python src/bayesopt.py'
+
+                    maxbo = str(self.optimizer.maxbo_slider.value)
+                    initbo = str(self.optimizer.initbo_slider.value)
 
 
-                if self.remote.password is None and self.remote.passphrase is not None:
-                    cmd = 'python src/bayesopt.py' + ' --passphrase ' + self.remote.passphrase \
-                          + ' --workdir ' + workdir + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads \
-                          + ' --y ' + yads
-                elif self.remote.password is not None and self.remote.passphrase is None:
-                    cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + ' --workdir ' + workdir \
-                          + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
-                elif self.remote.password is not None and self.remote.passphrase is not None:
-                    cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + \
-                           ' --passphrase ' + self.remote.passphrase + ' --workdir ' + workdir + ' --maxbo ' + maxbo \
-                          + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
+                    if self.remote.password is None and self.remote.passphrase is not None:
+                        cmd = 'python src/bayesopt.py' + ' --passphrase ' + self.remote.passphrase \
+                            + ' --workdir ' + workdir + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads \
+                            + ' --y ' + yads
+                    elif self.remote.password is not None and self.remote.passphrase is None:
+                        cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + ' --workdir ' + workdir \
+                            + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
+                    elif self.remote.password is not None and self.remote.passphrase is not None:
+                        cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + \
+                            ' --passphrase ' + self.remote.passphrase + ' --workdir ' + workdir + ' --maxbo ' + maxbo \
+                            + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
 
-                print(cmd)
-                p = subprocess.Popen(cmd, shell=True)
-                # print(p.pid)
+                    print(cmd)
+                    p = subprocess.Popen(cmd, shell=True)
+                    # print(p.pid)
 
-                boids = {}
+                    boids = {}
 
-                with open('../asapdata/boids.json', mode='r', encoding='utf-8') as fd:
-                    json_file = json.load(fd)
-                    boids = json_file
+                    with open('../asapdata/boids.json', mode='r', encoding='utf-8') as fd:
+                        json_file = json.load(fd)
+                        boids = json_file
 
-                    boids[workdir]['pid'] = p.pid
+                        boids[workdir]['pid'] = p.pid
 
-                with open('../asapdata/boids.json', mode='w', encoding='utf-8') as fp:
-                    json.dump(boids, fp)
+                    with open('../asapdata/boids.json', mode='w', encoding='utf-8') as fp:
+                        json.dump(boids, fp)
 
-                print('Bayesian optimization running with id {0}'.format(workdir))
+                    print('Bayesian optimization running with id {0}'.format(workdir))
+                else:
+
+                    print('Run Bayesian Optimization on cluster')
+                    print(os.getcwd())
+
+                    self.remote.create_workdir(path='ASAP/ONLINE')
+                    print('remote created\n')
 
     def runopt_clicked(self, b):
 

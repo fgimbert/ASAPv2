@@ -51,6 +51,7 @@ class Optimizer(object):
         self.calculator = 'EMT'
         self.ninit = 5
         self.__create_runopt_button()
+        self.__create_usedb_checkbox()
         self.__create_testopt_button()
         self.__create_runcalc_button()
         self.__create_inputvasp_button()
@@ -156,6 +157,13 @@ class Optimizer(object):
                                           disabled=False,
                                           layout=Layout(width='150px'),
                                           style={'button_color': 'lightblue'})
+
+    def __create_usedb_checkbox(self):
+        """Build the button widget to run bayesian optimization."""
+        self.usedb_checkbox = widgets.Checkbox(value = False, 
+                                                description = 'Use online database',
+                                                layout=Layout(width='150px')
+                                                )
 
     def __create_testopt_button(self):
         """Build the button widget to test bayesopt scropt (run only one step)."""

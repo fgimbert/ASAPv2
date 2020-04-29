@@ -26,6 +26,9 @@ import remote_module
 importlib.reload(remote_module)
 
 
+
+from fireworks import LaunchPad
+
 compatibility = MaterialsProjectCompatibility()
 
 __author__ = "Florian Gimbert"
@@ -589,6 +592,9 @@ class Bayesopt(object):
 
 
 def main(argv):
+
+    lpad = LaunchPad.auto_load()
+    
     password = None
     passphrase = None
 
@@ -614,4 +620,6 @@ def main(argv):
 
 
 if __name__ == "__main__":
+
+    
     main(sys.argv[1:])
