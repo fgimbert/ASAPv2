@@ -293,7 +293,7 @@ class GUI(object):
         self.nanopart_tab = widgets.VBox([self.nanopart_panel])
 
         miprocess_tabs = [self.slabopt_tab, self.nanopart_tab, self.aimd_tab, self.optmd_tab, self.jobs_tab, self.data_tab]
-        miprocess_name = ['Slab Optimization', 'Nanoparticles', 'AIMD', 'On-the-fly MD', 'Current Jobs', 'Database']
+        miprocess_name = ['Slab Optimization', 'Nanoparticles', 'DFT', 'On-the-fly MD', 'Current Jobs', 'Database']
         children = [content for content in miprocess_tabs]
 
         self.miprocess_tab = widgets.Tab()
@@ -1658,14 +1658,18 @@ class GUI(object):
             workdir = 'boid' + str(len_boids)
 
 
-            new_boid = {'boid':workdir, 'system': workdirsystem, 'pid': None, 'status': 'running', 'step': -1, 'code':self.calc_buttons.value}
+            new_boid = {'boid':workdir, 'system': workdirsystem, 'slab':self.__display_button.value[1], 'adsorbate':self.__display_button.value[9],
+                        'pid': None, 'status': 'running', 'step': -1, 'code':self.calc_buttons.value,
+                        'bestparam':None, 'minE':None}
             dbboids.insert(new_boid)
 
 
         else:
             boid = 0
             workdir = 'boid' + str(boid)
-            new_boid = {'boid':workdir, 'system': workdirsystem, 'pid': None, 'status': 'running', 'step': -1, 'code':self.calc_buttons.value}
+            new_boid = {'boid':workdir, 'system': workdirsystem, 'slab':self.__display_button.value[1], 'adsorbate':self.__display_button.value[9],
+                        'pid': None, 'status': 'running', 'step': -1, 'code':self.calc_buttons.value,
+                        'bestparam':None, 'minE':None}
 
             db = self.client["ASAP"]
             dbboids = db['boids']
@@ -1674,6 +1678,7 @@ class GUI(object):
 
         local_workdir = '../asapdata/' + workdir
         os.makedirs(local_workdir + '/vasp/', exist_ok=True)
+        os.makedirs(local_workdir + '/input_structure/', exist_ok=True)
 
         if self.calc_buttons.value == 'VASP':
             # Run outside Bayesian Optimization
@@ -1690,7 +1695,16 @@ class GUI(object):
                         file.write(str(parameter))
                         file.write('\n')
 
+                with open(local_workdir+'/input_structure/domain', 'w') as file:
+
+                    file.write(self.builder.adatom_radio.value)
+                    file.write('\n')
+                    for parameter in self.optimizer.parameters_select.value:
+                        file.write(str(parameter))
+                        file.write('\n')
+
                 ase.io.write(local_workdir+'/slab', slab, format='vasp')
+                ase.io.write(local_workdir+'/input_structure/slab', slab, format='vasp')
 
                 if self.builder.adatom_radio.value == 'Atom':
 
@@ -1698,6 +1712,7 @@ class GUI(object):
                     molecule = Atoms(molecule, positions=[(0., 0., 0.)])
 
                     ase.io.write(local_workdir+'/molecule', molecule, format='xyz')
+                    ase.io.write(local_workdir+'/input_structure/molecule', molecule, format='xyz')
 
                 elif self.builder.adatom_radio.value == 'Molecule':
 
@@ -1705,6 +1720,7 @@ class GUI(object):
                     atoms = molecule(self.builder.adatom_text.value)
 
                     ase.io.write(local_workdir+'/molecule', atoms, format='xyz')
+                    ase.io.write(local_workdir+'/input_structure/molecule', molecule, format='xyz')
 
                 current_structure = AseAtomsAdaptor.get_atoms(self.current_structure)
                 print(current_structure)
@@ -1756,9 +1772,14 @@ class GUI(object):
 
                 else:
 
-                    self.remote.create_workdir(path='ASAP/BOCALC/'+self.workdir)
+                    self.remote.create_workdir(path='ASAP/BOCALC/'+self.workdir+'/input_vasp')
                     
                     print('Run Bayesian Optimization on cluster')
+
+                     
+
+                    self.remote.put_files(path='ASAP/BOCALC/'+workdir+'/input_vasp', path_input=local_workdir+'/vasp/')
+                    print('Input files moved to {0} \n'.format('ASAP/BOCALC/'+workdir+'/input_vasp'))
 
                     cmd = 'python src/bayesopt.py'
 
@@ -1767,19 +1788,19 @@ class GUI(object):
 
 
                     if self.remote.password is None and self.remote.passphrase is not None:
-                        cmd = 'python src/bayesopt.py' + ' --passphrase ' + self.remote.passphrase \
+                        cmd = 'python bayesopt_online.py'  \
                             + ' --workdir ' + workdir + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads \
                             + ' --y ' + yads
                     elif self.remote.password is not None and self.remote.passphrase is None:
-                        cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + ' --workdir ' + workdir \
+                        cmd = 'python bayesopt_online.py'  + ' --workdir ' + workdir \
                             + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
                     elif self.remote.password is not None and self.remote.passphrase is not None:
-                        cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + \
-                            ' --passphrase ' + self.remote.passphrase + ' --workdir ' + workdir + ' --maxbo ' + maxbo \
+                        cmd = 'python bayesopt_online.py' + ' --workdir ' + workdir + ' --maxbo ' + maxbo \
                             + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
 
                     print(cmd)
-
+                    
+                    self.remote.execute_command(cmd,path='ASAP/BOCALC/'+workdir')
                     
                     dblist = self.client.list_database_names()
                     if "ASAP" in dblist:

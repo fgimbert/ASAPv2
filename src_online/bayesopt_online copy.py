@@ -17,14 +17,9 @@ import GPyOpt
 from GPyOpt.methods import BayesianOptimization
 
 import sys, getopt
-import importlib
 import json
-import paramiko
+#import paramiko
 import numpy as np
-
-import remote_module
-importlib.reload(remote_module)
-
 
 
 from fireworks import LaunchPad
@@ -82,26 +77,26 @@ class Bayesopt(object):
         #os.makedirs(self.localpath, exist_ok=True)
 
         
-        with open("testoutput.txt"), "a+") as file:
+        with open("testoutput.txt", "a+") as file:
             file.write('Bonjour, subprocess here\n')
             file.write('\n')
 
             # slab = ase.io.read('temp/slab', format='vasp')
             file.write('Slab\n')
 
-            with open('inpput_structure/slab', 'r') as slab:
+            with open('input_structure/slab', 'r') as slab:
                 lines = slab.readlines()
                 for line in lines:
                     file.write(line)
             file.write('Molecule\n')
-            with open('inpput_structure/molecule', 'r') as slab:
+            with open('input_structure/molecule', 'r') as slab:
                 lines = slab.readlines()
                 for line in lines:
                     file.write(line)
                     
             file.write('Domain\n')
 
-            with open('inpput_structure/domain', 'r') as slab:
+            with open('input_structure/domain', 'r') as slab:
                 lines = slab.readlines()
                 Adsorbate = str(line[0])
                 file.write(Adsorbate)
@@ -114,8 +109,8 @@ class Bayesopt(object):
             file.write('\n')
             file.flush()
 
-            self.molecule = ase.io.read('inpput_structure/molecule', format='xyz')
-            self.slab = ase.io.read('inpput_structure/slab', format='vasp')
+            self.molecule = ase.io.read('input_structure/molecule', format='xyz')
+            self.slab = ase.io.read('input_structure/slab', format='vasp')
 
             file.write('Reading finished\n')
 
@@ -137,7 +132,7 @@ class Bayesopt(object):
             #file.write('remote created\n')
 
             #self.remote.put_files(path=self.remote_input, path_input=self.localpath+'/vasp/', host=self.host, kwargs=self.kwargs)
-            f#ile.write('files moved\n')
+            #file.write('files moved\n')
 
             # self.remote.put_files(path=self.remote_workdir, path_input=path_input)
 
@@ -152,10 +147,12 @@ class Bayesopt(object):
             file.write('Start BO')
             #self.runopt()
 
-            outf = open("output.txt"), "a+")
+            outf = open("output.txt", "a+")
             outf.write('Finished')
             outf.close()
             file.write('Finished\n')
+
+            
 
     def add_adsorbate_ase(self, slab=None, molecule=None, h=None, x=None, y=None, offset=None):
 
@@ -412,9 +409,9 @@ class Bayesopt(object):
                 gamma_input = x[0][i]
                 input_vector += ' g=' + str(gamma_input)
 
-        with open("log.txt"), "a+") as file:
+        with open("log.txt", "a+") as file:
 
-            outf = open("output.txt"), "a+")
+            outf = open("output.txt", "a+")
             file.write('BO Step {0} for structure {1} !\n'.format(self.bo_step, self.workdir))
             file.write('Input vector: {0}\n'.format(x[0]))
             file.flush()
@@ -457,9 +454,9 @@ class Bayesopt(object):
             shutil.copy2("input_vasp/POTCAR".format(str(self.workdir)), self.step_path)  # complete target filename given
             shutil.copy2("input_vaspp/job_submit".format(str(self.workdir)), self.step_path)  # complete target filename given
 
-            self.remote_step = self.remote_workdir + '/bo_' + str(self.bo_step)
+            #self.remote_step = self.remote_workdir + '/bo_' + str(self.bo_step)
 
-            self.remote.create_workdir(path=self.remote_step, host=self.host, kwargs=self.kwargs)
+            #self.remote.create_workdir(path=self.remote_step, host=self.host, kwargs=self.kwargs)
             file.write('remote created\n')
 
             file.write('{0}\n'.format(self.remote_step))
@@ -467,7 +464,7 @@ class Bayesopt(object):
 
             file.flush()
 
-            self.remote.put_files(path=self.remote_step, path_input=self.step_path+'/', host=self.host, kwargs=self.kwargs)
+            #self.remote.put_files(path=self.remote_step, path_input=self.step_path+'/', host=self.host, kwargs=self.kwargs)
 
             test_vasp = True
 
@@ -528,11 +525,11 @@ class Bayesopt(object):
 
                 # Download output vasp calculation repertory self.step_path inside local workdir
                 vaspfile = self.remote_step + '/vasprun.xml'
-                try:
-                    self.remote.get_files(remote_path=vaspfile, local_path=self.step_path, host=self.host, kwargs=self.kwargs)
-                except:
+                #try:
+                 #   self.remote.get_files(remote_path=vaspfile, local_path=self.step_path, host=self.host, kwargs=self.kwargs)
+                #except:
                     # file.write('Download of Vasp files error\n')
-                    file.flush()
+                 #   file.flush()
 
                 file.write('Download of Vasp files done. Vasprun Read.\n')
                 # Read Energy from vasprun.xml !!!
@@ -590,10 +587,7 @@ class Bayesopt(object):
 
 def main(argv):
 
-    lpad = LaunchPad.auto_load()
-    
-    password = None
-    passphrase = None
+    #lpad = LaunchPad.auto_load()
 
     opts, args = getopt.getopt(argv, ":", ["workdir=", "maxbo=", "initbo=", "x=", "y="])
 
@@ -609,7 +603,7 @@ def main(argv):
         elif opt == "--y":
             y = arg
 
-    bayesopt = Bayesopt(password, passphrase, workdir, maxbo, initbo, x, y)
+    bayesopt = Bayesopt(workdir, maxbo, initbo, x, y)
 
 
 if __name__ == "__main__":

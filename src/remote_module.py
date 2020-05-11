@@ -455,7 +455,7 @@ class Remote(object):
 
         return
 
-    def execute_command(self, command='ls', path=None, host=None, kwargs=None):
+    def execute_command(self, command='ls', path=None, get_pty=False, host=None, kwargs=None):
         """
         Put local files (input files, job submit file and shell scripts) to remote working directory
         """
@@ -471,8 +471,11 @@ class Remote(object):
             client.set_missing_host_key_policy(paramiko.WarningPolicy())
 
             client.connect(host, **kwargs)
-            stdin, stdout, stderr = client.exec_command("cd {0}/; {1}".format(path, command))
-            errs = stderr.read().decode('utf-8')
+            stdin, stdout, stderr = client.exec_command("cd {0}/; {1}".format(path, command), get_pty=get_pty)
+            #out = stdout.read().decode('utf-8')
+            #print(out)
+            #errs = stderr.read().decode('utf-8')
+            #print(errs)
 
 
     def create_workdir(self, path=None, host=None, kwargs=None):

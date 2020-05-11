@@ -41,11 +41,31 @@ class Database(object):
         self.rester = MPRester(MAPI_KEY)
         self.__create_showdb_button()
         self.__create_db_buttons()
+        self.__create_remoteinfo_text()
 
         self.json_file = 'database/database.json'
         self.db = {'bulk': {}, 'slab': {}}
         if os.path.isfile('database/database.json'):
             self.__load_db("database/database.json")
+
+    def __create_remoteinfo_text(self):
+        """Build the Text widget for Miller index  input"""
+        self.hostname_text = widgets.Text(
+            placeholder='hostname',
+            value=None,
+            description='Hostname',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+
+        self.database_text = widgets.Text(
+            placeholder='dbtest',
+            value=None,
+            description='database',
+            disabled=False,
+            style={'description_width': 'initial'}
+        )
+
 
     def __create_showdb_button(self):
 

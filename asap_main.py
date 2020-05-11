@@ -216,6 +216,9 @@ class GUI(object):
         self.remote_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px', height='200px',
                                                             overflow_y='auto'))
 
+        self.database_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px', height='200px',
+                                                            overflow_y='auto'))                                                    
+
         self.vaspconfig_panel = ipywidgets.Output(layout=Layout(width='99.6%', border='solid 1px', height='200px',
                                                                 overflow_y='auto'))
 
@@ -281,7 +284,6 @@ class GUI(object):
         for i in range(len(children)):
             self.tab.set_title(i, tab_name[i])
 
-
         # Tabs for Materials Informatics Tools
 
         self.slabopt_tab = widgets.VBox([self.tab])
@@ -290,7 +292,7 @@ class GUI(object):
         self.nanopart_tab = widgets.VBox([self.nanopart_panel])
 
         miprocess_tabs = [self.slabopt_tab, self.nanopart_tab, self.aimd_tab, self.optmd_tab, self.jobs_tab, self.data_tab]
-        miprocess_name = ['Slab Optimization', 'Nanoparticles', 'AIMD', 'On-the-fly MD', 'Current Jobs', 'Database']
+        miprocess_name = ['Slab Optimization', 'Nanoparticles', 'DFT', 'On-the-fly MD', 'Current Jobs', 'Database']
         children = [content for content in miprocess_tabs]
 
         self.miprocess_tab = widgets.Tab()
@@ -787,6 +789,18 @@ class GUI(object):
                                       widgets.HBox([self.remote.id_checkbox, self.remote.upload_button]),
                                       self.remote.remote_button]))
 
+            text_database = 'MongoDB Database Configuration:'
+            databaseWidget = widgets.HTML(value=f"<b><font color='black'>{text_database}</b>")
+
+            with self.database_panel:
+                text_cluster = ' If necessary, add your own remote cluster: '
+                textWidget = widgets.HTML(value=f"<b><font color='black'>{text_cluster}</b>")
+
+                display(widgets.VBox([self.database.hostname_text,
+                                      self.database.database_text]))
+
+
+
             text_vasp = 'VASP Configuration:'
             vaspWidget = widgets.HTML(value=f"<b><font color='black'>{text_vasp}</b>")
 
@@ -817,6 +831,8 @@ class GUI(object):
             display(widgets.VBox([calculator,
                                   remoteWidget,
                                   self.remote_panel,
+                                  databaseWidget,
+                                  self.database_panel,
                                   vaspWidget,
                                   self.vaspconfig_panel,
                                   #jobWidget,
@@ -1623,8 +1639,10 @@ class GUI(object):
         self.slabmin = None
         self.optimizer.bo_progress.value = 0
         self.optimizer.bo_progress.max = self.optimizer.maxbo_slider.value + self.optimizer.ninit
+        #print(type(self.builder.slab_button.value[0]))
 
         slab = AseAtomsAdaptor.get_atoms(self.builder.slab_button.value[0])
+        
 
         xads = str(self.builder.ads_sites['all'][self.builder.sites_dropdown.value][0])
         yads = str(self.builder.ads_sites['all'][self.builder.sites_dropdown.value][1])
@@ -1664,6 +1682,7 @@ class GUI(object):
 
         local_workdir = '../asapdata/' + workdir
         os.makedirs(local_workdir + '/vasp/', exist_ok=True)
+        os.makedirs(local_workdir + '/input_structure/', exist_ok=True)
 
         if self.calc_buttons.value == 'VASP':
             # Run outside Bayesian Optimization
@@ -1680,7 +1699,23 @@ class GUI(object):
                         file.write(str(parameter))
                         file.write('\n')
 
+                with open(local_workdir+'/input_structure/domain', 'w') as file:
+
+                    file.write(self.builder.adatom_radio.value)
+                    file.write('\n')
+                    for parameter in self.optimizer.parameters_select.value:
+                        file.write(str(parameter))
+                        file.write('\n')
+
+
+                with open(local_workdir+'/slab.json', 'w') as file:
+                    json.dump(self.builder.slab_button.value[0].as_dict(), file)
+
+                with open(local_workdir+'/input_structure/slab.json', 'w') as file:
+                    json.dump(self.builder.slab_button.value[0].as_dict(), file)
+
                 ase.io.write(local_workdir+'/slab', slab, format='vasp')
+                ase.io.write(local_workdir+'/input_structure/slab', slab, format='vasp')
 
                 if self.builder.adatom_radio.value == 'Atom':
 
@@ -1688,6 +1723,7 @@ class GUI(object):
                     molecule = Atoms(molecule, positions=[(0., 0., 0.)])
 
                     ase.io.write(local_workdir+'/molecule', molecule, format='xyz')
+                    ase.io.write(local_workdir+'/input_structure/molecule', molecule, format='xyz')
 
                 elif self.builder.adatom_radio.value == 'Molecule':
 
@@ -1695,6 +1731,7 @@ class GUI(object):
                     atoms = molecule(self.builder.adatom_text.value)
 
                     ase.io.write(local_workdir+'/molecule', atoms, format='xyz')
+                    ase.io.write(local_workdir+'/input_structure/molecule', molecule, format='xyz')
 
                 current_structure = AseAtomsAdaptor.get_atoms(self.current_structure)
                 print(current_structure)
@@ -1724,14 +1761,14 @@ class GUI(object):
                     if self.remote.password is None and self.remote.passphrase is not None:
                         cmd = 'python src/bayesopt.py' + ' --passphrase ' + self.remote.passphrase \
                             + ' --workdir ' + workdir + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads \
-                            + ' --y ' + yads
+                            + ' --y ' + yads 
                     elif self.remote.password is not None and self.remote.passphrase is None:
                         cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + ' --workdir ' + workdir \
-                            + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
+                            + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads 
                     elif self.remote.password is not None and self.remote.passphrase is not None:
                         cmd = 'python src/bayesopt.py' + ' --password ' + self.remote.password + \
                             ' --passphrase ' + self.remote.passphrase + ' --workdir ' + workdir + ' --maxbo ' + maxbo \
-                            + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads
+                            + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads 
 
                     print(cmd)
                     p = subprocess.Popen(cmd, shell=True)
@@ -1754,56 +1791,78 @@ class GUI(object):
                     print('Run Bayesian Optimization on cluster')
 
 
-                    self.remote.create_workdir(path='ASAP/BOCALC/'+workdir)
+                    self.remote.create_workdir(path='ASAP/BOCALC/'+workdir+'/input_vasp')
+                    self.remote.create_workdir(path='ASAP/BOCALC/'+workdir+'/input_structure')
 
-                    print('Create boid{0} online'.format(workdir))
-                    
-                    client = MongoClient("mongodb+srv://fgimbert:Ph1s1que@cluster0-cysy3.gcp.mongodb.net/test?retryWrites=true&w=majority")
-                    dblist = client.list_database_names()
+                    self.remote.put_files(path='ASAP/BOCALC/'+workdir+'/input_vasp', path_input=local_workdir+'/vasp/')
+                    self.remote.put_files(path='ASAP/BOCALC/'+workdir+'/input_structure', path_input=local_workdir+'/input_structure/')
+
+
+                    print('Input files moved to {0} \n'.format('ASAP/BOCALC/'+workdir+'/input_vasp'))
+
+                    print('Create {0} online'.format(workdir))
+
+                    dbclient = MongoClient("mongodb+srv://fgimbert:Ph1s1que@cluster0-cysy3.gcp.mongodb.net/test?retryWrites=true&w=majority")
+
+                    maxbo = str(self.optimizer.maxbo_slider.value)
+                    initbo = str(self.optimizer.initbo_slider.value)
+
+                    print(' Files uploaded')
+
+                    if self.remote.password is None and self.remote.passphrase is not None:
+                        cmd = 'python bayesopt_online.py'  \
+                            + ' --workdir ' + workdir + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads \
+                            + ' --y ' + yads 
+                    elif self.remote.password is not None and self.remote.passphrase is None:
+                        cmd = 'python bayesopt_online.py'  + ' --workdir ' + workdir \
+                            + ' --maxbo ' + maxbo + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads 
+                    elif self.remote.password is not None and self.remote.passphrase is not None:
+                        cmd = 'python bayesopt_online.py' + ' --workdir ' + workdir + ' --maxbo ' + maxbo \
+                            + ' --initbo ' + initbo + ' --x ' + xads + ' --y ' + yads 
+
+                    print(cmd)
+
+                    #with open('src_online/job_fw.sh', 'w', newline='\n') as filejob:
+                        #filejob.write(cmd)
+                    self.remote.put_files(path='ASAP/BOCALC/'+workdir, path_input='src_online/')
+
+                    print(' Files uploaded')
+
+                    #self.remote.execute_command(command='chmod +x job_fw.sh; ./job_fw.sh',path='ASAP/BOCALC/'+workdir,get_pty=True)
+                    self.remote.execute_command(command='. /home/f-gimbert/.bash_profile; ' + cmd,path='ASAP/BOCALC/'+workdir, get_pty=False)
+                    print('Command executed')
+
+                    dblist = dbclient.list_database_names()
                     if "ASAP" in dblist:
                         print("The ASAP database exists.")
-                        db = client["ASAP"]
+                        db = dbclient["ASAP"]
                         collection = db['boids']
 
-                        #import pprint
-                        print(collection.find_one({"boid": "boid10"}))
-
-                        #new_boids = {'boid':boid, 'system':boids[boid]['system'], 'status':boids[boid]['status'],'pid':boids[boid]['pid'], 'step':boids[boid]['step']}
-
-                        newbo = collection.find_one({"boid": "boid10"})
-                        collection.update_one({ '_id': newbo.get('_id') }, {"$set": {"pid": "Bonjour"}})
-                        print(collection.find_one({"boid": "boid10"}))
-
-                        #print(collection['boid0']['system'])
-
-
+                        new_boids = {'boid':workdir, 'system':boids[workdir]['system'], 'status':boids[workdir]['status'],'pid':boids[workdir]['pid'], 'step':boids[workdir]['step']}
+                        collection.insert(new_boids)
                         
                     else:
 
-                        print('No dbtest database')
-                        db = client["ASAP"]
+                        print('No ASAP database')
+                        db = dbclient["ASAP"]
                         collection = db['boids']
 
                         new_boids = {}
 
                         for boid in boids.keys():
                             new_boids = {'boid':boid, 'system':boids[boid]['system'], 'status':boids[boid]['status'],'pid':boids[boid]['pid'], 'step':boids[boid]['step']}
-
                             # Insert the dictionary into Mongo
                             collection.insert(new_boids)
 
-                        #boids = {}
 
-                        #boids[workdir]['pid'] = p.pid
-
-
-
-                    print(os.getcwd())
+                    #print(os.getcwd())
+                    print('MongoDB entry created\n')
+                    dbclient.close()
 
 
+                    
 
-                    self.remote.create_workdir(path='ASAP/ONLINE')
-                    print('remote created\n')
+                   
 
     def runopt_clicked(self, b):
 

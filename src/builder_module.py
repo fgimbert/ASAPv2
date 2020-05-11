@@ -458,15 +458,23 @@ class Builder(object):
         
         self.entry_id = entry_id
 
+        print(type(slab))
+        #import json
+        #with open('temp/slab.json', 'w') as file:
+         #   json.dump(slab.as_dict(), file)
+
         atoms = AseAtomsAdaptor.get_atoms(slab)
         atoms_slab = atoms.copy()
+
         structure = AseAtomsAdaptor.get_structure(atoms_slab)
+        #print(type(structure))
 
         nx = int(self.supercellx_text.value)
         ny = int(self.supercelly_text.value)
         nz = int(self.supercellz_text.value)
 
         structure.make_supercell([nx, ny, nz])
+        print(type(structure))
 
         return structure
 

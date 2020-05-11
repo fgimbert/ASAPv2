@@ -17,18 +17,27 @@ import GPyOpt
 from GPyOpt.methods import BayesianOptimization
 
 import sys, getopt
-import importlib
 import json
-import paramiko
+#import paramiko
 import numpy as np
-
-import remote_module
-importlib.reload(remote_module)
-
 
 
 from fireworks import LaunchPad
 
+from pymatgen import Structure, Lattice, MPRester, Molecule
+from pymatgen.analysis.adsorption import *
+from pymatgen.core.surface import generate_all_slabs
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from matplotlib import pyplot as plt
+
+from pymongo import MongoClient
+
+from fireworks import Workflow
+from atomate.vasp.fireworks.core import StaticFW, OptimizeFW
+from fireworks import LaunchPad
+from atomate.vasp.workflows.presets.core import wf_static
+from atomate.vasp.workflows.base.adsorption import get_wf_slab
+from atomate.vasp.powerups import add_additional_fields_to_taskdocs, add_tags
 compatibility = MaterialsProjectCompatibility()
 
 __author__ = "Florian Gimbert"
@@ -82,26 +91,26 @@ class Bayesopt(object):
         #os.makedirs(self.localpath, exist_ok=True)
 
         
-        with open("testoutput.txt"), "a+") as file:
+        with open("testoutput.txt", "a+") as file:
             file.write('Bonjour, subprocess here\n')
             file.write('\n')
 
             # slab = ase.io.read('temp/slab', format='vasp')
             file.write('Slab\n')
 
-            with open('inpput_structure/slab', 'r') as slab:
+            with open('input_structure/slab', 'r') as slab:
                 lines = slab.readlines()
                 for line in lines:
                     file.write(line)
             file.write('Molecule\n')
-            with open('inpput_structure/molecule', 'r') as slab:
+            with open('input_structure/molecule', 'r') as slab:
                 lines = slab.readlines()
                 for line in lines:
                     file.write(line)
                     
             file.write('Domain\n')
 
-            with open('inpput_structure/domain', 'r') as slab:
+            with open('input_structure/domain', 'r') as slab:
                 lines = slab.readlines()
                 Adsorbate = str(line[0])
                 file.write(Adsorbate)
@@ -114,18 +123,27 @@ class Bayesopt(object):
             file.write('\n')
             file.flush()
 
-            self.molecule = ase.io.read('inpput_structure/molecule', format='xyz')
-            self.slab = ase.io.read('inpput_structure/slab', format='vasp')
+            self.molecule = ase.io.read('input_structure/molecule', format='xyz')
+            self.slab = ase.io.read('input_structure/slab', format='vasp')
 
             file.write('Reading finished\n')
 
-            self.structure = self.add_adsorbate_ase(slab=self.slab, molecule=self.molecule,
-                                                    x=self.xads, y=self.yads, h=2.0)
+            self.structure = self.add_adsorbate_ase(slab=self.slab, molecule=self.molecule, x=self.xads, y=self.yads, h=2.0)
 
             file.write('Add_adsorbate finished\n')
 
-            ase.io.write('structure', self.structure, format='vasp')
-            ase.io.write('/input_vasp/POSCAR', self.structure, format='vasp')
+            ase.io.write('input_structure/structure', self.structure, format='vasp')
+            ase.io.write('input_vasp/POSCAR', self.structure, format='vasp')
+            
+            #self.slab_atoms = ase.io.read('input_structure/slab', format='vasp')
+
+            with open('input_structure/slab.json', 'r') as f:
+                d = json.load(f)
+
+                self.slab_structure = Structure.from_dict(d)
+
+            print(type(self.slab_structure))
+            #ase.io.write('input_vasp/POSCAR', self.slab, format='vasp')
 
             # time.sleep(60)
 
@@ -137,7 +155,7 @@ class Bayesopt(object):
             #file.write('remote created\n')
 
             #self.remote.put_files(path=self.remote_input, path_input=self.localpath+'/vasp/', host=self.host, kwargs=self.kwargs)
-            f#ile.write('files moved\n')
+            #file.write('files moved\n')
 
             # self.remote.put_files(path=self.remote_workdir, path_input=path_input)
 
@@ -150,16 +168,34 @@ class Bayesopt(object):
                 self.submitfile = jobfile.read()
 
             file.write('Start BO')
-            #self.runopt()
+            self.runopt()
 
-            outf = open("output.txt"), "a+")
+            outf = open("output.txt", "a+")
+            #outf.write(self.slab_structure)
+
+            #self.test_fw()
+
+            #self.opt_slab()
+            #os.system('python test_fw.py')
+
+            client = MongoClient("mongodb+srv://fgimbert:Ph1s1que@cluster0-cysy3.gcp.mongodb.net/test?retryWrites=true&w=majority")
+
+            dblist = client.list_database_names()
+            
+            db = client["ASAP"]
+            collection = db['boids']
+
+            newbo = collection.find_one({"boid": "{0}".format(self.workdir)})
+            collection.update_one({ '_id': newbo.get('_id') }, {"$set": {"status": "finished"}})
+
             outf.write('Finished')
             outf.close()
             file.write('Finished\n')
 
+
     def add_adsorbate_ase(self, slab=None, molecule=None, h=None, x=None, y=None, offset=None):
 
-        with open("../asapdata/{0}/testadds.txt".format(str(self.workdir)), "a+") as file:
+        with open("testadds.txt", "a+") as file:
             file.write('Hello, add_adsorbate here\n')
             file.flush()
 
@@ -194,91 +230,6 @@ class Bayesopt(object):
 
             return structure
 
-    def add_adsorbate_ase_mol(self, slab=None, molecule=None, h=None, x=None, y=None, alpha=None, beta=None, gamma=None,
-                              offset=None):
-
-        with open("../asapdata/{0}/testadds.txt".format(str(self.workdir)), "a+") as file:
-            file.write('Hello, add_adsorbate here\n')
-            file.flush()
-
-            from pymatgen.io.ase import AseAtomsAdaptor
-
-            from ase.build import add_adsorbate
-
-            molecule = molecule
-            structure = slab.copy()
-
-            file.write('Hello, get_atoms start: \n')
-            file.flush()
-            # ads_slab = AseAtomsAdaptor.get_atoms(structure)
-            cell = structure.get_cell()
-            file.write('Hello, get_cell finished\n')
-
-            if alpha is None:
-                molecule.rotate(0, 'x')
-            else:
-                # print(type(alpha))
-                alpha = float(alpha)
-                # print(type(alpha))
-                molecule.rotate(alpha, 'x')
-                # print('rotation done')
-
-            if beta is None:
-                molecule.rotate(0, 'y')
-            else:
-                beta = float(beta)
-                molecule.rotate(beta, 'y')
-
-            if gamma is None:
-                molecule.rotate(0, 'z')
-            else:
-                gamma = float(gamma)
-                molecule.rotate(gamma, 'z')
-
-            if h is None:
-                h = 3.0
-
-            if x is None and y is None:
-                x_cart = self.xads
-                y_cart = self.yads
-            else:
-                x_cart = x * cell[0][0] + y * cell[1][0]
-                y_cart = x * cell[0][1] + y * cell[1][1]
-
-            # print(h, x, y)
-
-            add_adsorbate(structure, molecule, h, (x_cart, y_cart))
-            structure.center(axis=2, vacuum=self.vacuum)
-            file.write('Hello, add_adsorbate finished\n')
-
-            return structure
-
-    def checkls(self, path='ASAP/BO/'):
-
-        """
-        Connect remote host and check remote files
-        """
-
-        with open("../asapdata/{0}/testls.txt".format(str(self.workdir)), "a+") as file:
-            with paramiko.SSHClient() as client:
-                client.load_system_host_keys()
-                client.set_missing_host_key_policy(paramiko.WarningPolicy())
-
-                client.connect(self.host, **self.kwargs)
-                stdin, stdout, stderr = client.exec_command("ls {0}".format(self.remote_workdir))
-                errs = stderr.read().decode('utf-8')
-
-                eerrs = stderr.read().decode('utf-8')
-                dir_client = stdout.read().decode('utf-8')
-                if eerrs:
-                    print(f"ls failed in connecthost:")
-
-                for line in dir_client.split():
-                    file.write(line)
-                    file.write('\n')
-
-                client.close()
-
     def runopt(self):
 
         # For 6d optimizations, it would be better to do several optimizations than a big one. Indeed, a big
@@ -302,9 +253,9 @@ class Bayesopt(object):
                                       exact_feval=True)
 
         myBopt.run_optimization(max_iter=self.maxbo)
-        myBopt.plot_convergence(filename="../asapdata/{0}/bo_convergence".format(str(self.workdir)))
+        myBopt.plot_convergence(filename="bo_convergence".format(str(self.workdir)))
         if len(self.domain) <=2:
-            myBopt.plot_acquisition(filename="../asapdata/{0}/bo_acquisition".format(str(self.workdir)))
+            myBopt.plot_acquisition(filename="bo_acquisition".format(str(self.workdir)))
 
         # print(x[0])
         x_input = None
@@ -329,17 +280,18 @@ class Bayesopt(object):
             if parameter['name'] == 'gamma':
                 gamma_input = myBopt.x_opt[i]
 
+
     def bo_calculate(self, x):
 
-        with open("../asapdata/{0}/testbo.txt".format(str(self.workdir)), "a+") as file:
+        with open("testbo.txt".format(str(self.workdir)), "a+") as file:
 
             file.write('Read input files\n')
 
-            self.molecule = ase.io.read(self.localpath+'/molecule', format='xyz')
-            self.slab = ase.io.read(self.localpath+'/slab', format='vasp')
+            self.molecule = ase.io.read('input_structure/molecule', format='xyz')
+            self.slab = ase.io.read('input_structure/slab', format='vasp')
 
-            self.step_path = self.localpath + '/bo_' + str(self.bo_step)
-            file.write(self.step_path)
+            self.step_path = 'bo_' + str(self.bo_step)
+            file.write('Step path : {0}'.format(self.step_path))
             file.write(' \n')
             file.flush()
 
@@ -388,8 +340,18 @@ class Bayesopt(object):
 
             return y_next
 
+
     def calculate(self, x):
 
+        dbclient = MongoClient("mongodb+srv://fgimbert:Ph1s1que@cluster0-cysy3.gcp.mongodb.net/test?retryWrites=true&w=majority")
+
+        #dblist = dbclient.list_database_names()s
+        db = dbclient["ASAP"]
+        collection = db['boids']
+
+        newbo = collection.find_one({"boid": "{0}".format(self.workdir)})
+        collection.update_one({ '_id': newbo.get('_id') }, {"$set": {"step": self.bo_step}})
+        dbclient.close()
         input_vector = ''
 
         for i, parameter in enumerate(self.domain):
@@ -412,9 +374,9 @@ class Bayesopt(object):
                 gamma_input = x[0][i]
                 input_vector += ' g=' + str(gamma_input)
 
-        with open("log.txt"), "a+") as file:
+        with open("log.txt", "a+") as file:
 
-            outf = open("output.txt"), "a+")
+            outf = open("output.txt", "a+")
             file.write('BO Step {0} for structure {1} !\n'.format(self.bo_step, self.workdir))
             file.write('Input vector: {0}\n'.format(x[0]))
             file.flush()
@@ -430,9 +392,10 @@ class Bayesopt(object):
                 poscar = file.readlines()
             """
 
-            # Replace the target string
+            # Replace the target JOBNAME string in config /home/f-gimbert/atomate/fwtemplate
 
-            with open('input_vasp/submit_file.sh', 'r') as jobfile:
+
+            with open('/home/f-gimbert/atomate/fwtemplate/SGE_template_JOBNAME.txt', 'r') as jobfile:
                 filedata = jobfile.read()
 
             # Replace the target string
@@ -443,7 +406,7 @@ class Bayesopt(object):
             filedata = filedata.replace('JOBNAME', jobname)
 
             # Write the file out again
-            with open(self.step_path + '/submit_file.sh', 'w', newline='\n') as filejob:
+            with open('/home/f-gimbert/atomate/fwtemplate/SGE_template.txt', 'w', newline='\n') as filejob:
                 filejob.write(filedata)
 
             file.write('POSCAR creation\n')
@@ -455,19 +418,19 @@ class Bayesopt(object):
             shutil.copy2('input_vasp/KPOINTS'.format(str(self.workdir)), self.step_path)  # complete target filename given
             shutil.copy2("input_vasp/INCAR".format(str(self.workdir)), self.step_path)  # complete target filename given
             shutil.copy2("input_vasp/POTCAR".format(str(self.workdir)), self.step_path)  # complete target filename given
-            shutil.copy2("input_vaspp/job_submit".format(str(self.workdir)), self.step_path)  # complete target filename given
+            #shutil.copy2("input_vaspp/job_submit".format(str(self.workdir)), self.step_path)  # complete target filename given
 
-            self.remote_step = self.remote_workdir + '/bo_' + str(self.bo_step)
+            #self.remote_step = self.remote_workdir + '/bo_' + str(self.bo_step)
 
-            self.remote.create_workdir(path=self.remote_step, host=self.host, kwargs=self.kwargs)
-            file.write('remote created\n')
+            #self.remote.create_workdir(path=self.remote_step, host=self.host, kwargs=self.kwargs)
+           # file.write('remote created\n')
 
-            file.write('{0}\n'.format(self.remote_step))
+           # file.write('{0}\n'.format(self.remote_step))
             file.write('{0}\n'.format(self.step_path))
 
             file.flush()
 
-            self.remote.put_files(path=self.remote_step, path_input=self.step_path+'/', host=self.host, kwargs=self.kwargs)
+            #self.remote.put_files(path=self.remote_step, path_input=self.step_path+'/', host=self.host, kwargs=self.kwargs)
 
             test_vasp = True
 
@@ -475,125 +438,212 @@ class Bayesopt(object):
                 # Execute VASP calculations inside test_i on enemat by ssh
 
                 ## CONNECTION TO ATLAS NEED TO CHANGE THIS TO RUN FW JOB !!!
+                #load structure from file
+
+                #struct = Structure.from_file(self.step_path+'/POSCAR')
+                atoms = ase.io.read(self.step_path+'/POSCAR', format='vasp')
+
+                struct = AseAtomsAdaptor.get_structure(atoms)
+
+                print(struct)
+                file.write(' Current directory{0} \n'.format(os.getcwd()))
+                os.chdir(self.step_path)
+                file.write(' Current directory{0} \n'.format(os.getcwd()))
+                file.flush()
 
 
-                with paramiko.SSHClient() as client:
-                    client.load_system_host_keys()
-                    client.set_missing_host_key_policy(paramiko.WarningPolicy)
+                lpad = LaunchPad.auto_load()
 
-                    # Establish SSH connection
-                    client.connect(self.host, **self.kwargs)
-                    # Submit our Grid Engine job by running a remote 'qsub' command over SSH
+                db_file='/home/f-gimbert/atomate/config/db.json'
 
-                    if test_vasp:
-                        file.write('connected to {0}\n'.format(self.remote_step))
-                        file.flush()
+                fw = StaticFW(structure=struct, db_file=db_file)
 
-                        ## CONNECTION TO ATLAS NEED TO CHANGE THIS TO RUN FW JOB !!!
-                        stdin, stdout, stderr = client.exec_command("chmod +x {0}/job_submit; cd {0}/; ./job_submit".
-                                                                    format(self.remote_step))
-                        eerrs = stderr.read().decode('utf-8')
-                        if eerrs:
-                            file.write(f"chmod failed in connecthost:")
-                            file.flush()
-                            file.write(eerrs)
-                            file.flush()
-                        file.write('job submitted to {0}\n'.format(self.bo_step))
-                        file.flush()
+                wf = Workflow([fw],name='Adsorbate static wf from {0}/{1}'.format(self.workdir, self.step_path))
+                new_wf = add_additional_fields_to_taskdocs(wf, {"system":"adsorption"})
+                new_wf = add_additional_fields_to_taskdocs(new_wf, {"bostep": self.workdir+"-"+self.step_path})
+                lpad.add_wf(new_wf)
 
-                        id_job = stdout.readlines()[0].split()[2]
-                        file.write('idjob: {0}\n'.format(id_job))
-                        file.write("qstat -r | grep -cw '{0}'\n".format(id_job))
-                        file.flush()
-                        time.sleep(10)
-                        stdin, stdout, stderr = client.exec_command("qstat -r | grep -cw '{0}'".format(id_job))
-                        result = stdout.readlines()
-                    else:
-                        result = [0]
+                import subprocess
+                cmd = 'qlaunch singleshot'.format(self.step_path)
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+                (output, err) = p.communicate()
 
-                while int(result[0]) != 0:
-                    with paramiko.SSHClient() as client:
-                        client.load_system_host_keys()
-                        client.set_missing_host_key_policy(paramiko.WarningPolicy)
-                        # Establish SSH connection
-                        client.connect(self.host, **self.kwargs)
-                        # stdin,stdout,stderr = client.
-                        # exec_command("qstat -r | grep -cw {0}".format(prj_info['prefixes'][0]))
-                        stdin, stdout, stderr = client.exec_command("qstat -r | grep -cw '{0}'".format(id_job))
-                        result = stdout.readlines()
-                    time.sleep(300)
+                #print(output)
+                id_job = output.decode('utf-8').split()[-1]
+        
+                file.write(' ### Id job : {0} ####\n'.format(id_job))
+                file.flush()
+                os.chdir('/home/f-gimbert/ASAP/BOCALC/'+ self.workdir)
+                file.write(' Current directory {0} \n'.format(os.getcwd()))
+                file.flush()
+
+                cmd = "qstat -r | grep -cw '{0}'".format(id_job)
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+                (output, err) = p.communicate()
+
+                id_running = output.decode('utf-8').split()
+                file.write(str(id_running[0]))
+                file.flush()
+
+                while int(id_running[0]) != 0:
+
+                    cmd = "qstat -r | grep -cw '{0}'".format(id_job)
+                    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+                    (output, err) = p.communicate()
+                    id_running = output.decode('utf-8').split()
+                    file.write('Waiting vasp\n')
+                    file.flush()
+                    time.sleep(120)
 
                 file.write('VASP calculation finished.\n')
                 file.flush()
 
-                # Download output vasp calculation repertory self.step_path inside local workdir
-                vaspfile = self.remote_step + '/vasprun.xml'
-                try:
-                    self.remote.get_files(remote_path=vaspfile, local_path=self.step_path, host=self.host, kwargs=self.kwargs)
-                except:
-                    # file.write('Download of Vasp files error\n')
+                read_energy = False
+                test_energy = True
+                # Read output vasp calculation from MongoDB entry
+                if test_energy:
+
+                    dbclient = MongoClient("mongodb+srv://fgimbert:Ph1s1que@cluster0-cysy3.gcp.mongodb.net/test?retryWrites=true&w=majority")
+                    db = dbclient["dbtest"]
+                    collection = db['tasks']
+
+                    newbo = collection.find_one({"bostep": "{0}-{1}".format(self.workdir,self.step_path)})
+
+                    energy = float(newbo['output']['energy'])
+                    file.write('Energy {0} eV'.format(energy))
+
                     file.flush()
 
-                file.write('Download of Vasp files done. Vasprun Read.\n')
-                # Read Energy from vasprun.xml !!!
-                file.write('before vasprun \n')
-                file.flush()
-                if os.path.exists('{0}/vasprun.xml'.format(self.step_path)):
-                    file.write('{0}/vasprun.xml exists !\n'.format(self.step_path))
 
-                from pymatgen.io.vasp import Vasprun
-                try:
-                    vasprun = Vasprun('{0}/vasprun.xml'.format(self.step_path))
-                except:
-                    file.write('Error while reading vasprun ! Output energy above hull set to 100 \n')
-                    file.write('Probably an error during scf. Check input file for BO step {0}\n'.format(self.bo_step))
-                    file.write(
-                        '{0} {1}/{2} ({4}) {3} -error {5}\n'.format(self.workdir, self.bo_step, self.maxbo, 100,
-                                                                    self.initbo, input_vector))
-                    outf.write('{0} {1}/{2} ({4}) {3} -error {5}\n'.format(self.workdir, self.bo_step, self.maxbo, 100,
-                                                                           self.initbo, input_vector))
-                    file.flush()
-                    outf.flush()
-                    outf.close()
-                    return 100
+                    #collection.update_one({ '_id': newbo.get('_id') }, {"$set": {"step": self.bo_step}})
+                    dbclient.close()
 
-                file.write('after vasprun\n')
-                file.flush()
-                if vasprun.converged_electronic:
-                    file.write('Electronic step convergence has been reached in the final ionic step\n')
-                else:
-                    file.write('Electronic step convergence has not been reached in the final ionic step\n')
+                    return energy
 
-                energy = vasprun.final_energy
-                file.write('{0} {1}/{2} ({4}) {3} {5}\n'.format(self.workdir, self.bo_step, self.maxbo, energy,
-                                                                self.initbo, input_vector))
-                outf.write(
-                    '{0} {1}/{2} ({4}) {3} {5}\n'.format(self.workdir, self.bo_step, self.maxbo, energy, self.initbo,
-                                                         input_vector))
-                file.flush()
-                outf.flush()
-                outf.close()
-                return energy
-            else:
-                file.write(
-                    '{0} {1}/{2} ({4}) {3} {5}\n'.format(self.workdir, self.bo_step, self.maxbo, self.bo_step,
-                                                         self.initbo, input_vector))
-                outf.write(
-                    '{0} {1}/{2} ({4}) {3} {5}\n'.format(self.workdir, self.bo_step, self.maxbo, self.bo_step,
-                                                         self.initbo, input_vector))
-                file.write('Output energy: {0}\n'.format(self.bo_step))
-                file.flush()
-                outf.flush()
-                outf.close()
-                return self.bo_step
+
+            #     if read_energy:
+
+            #         vaspfile = self.step_path + '/vasprun.xml'
+            #         file.write('before vasprun \n')
+            #         file.flush()
+
+            #         if os.path.exists('{0}/vasprun.xml'.format(self.step_path)):
+            #             file.write('{0}/vasprun.xml exists !\n'.format(self.step_path))
+
+            #         from pymatgen.io.vasp import Vasprun
+            #         try:
+            #             vasprun = Vasprun('{0}/vasprun.xml'.format(self.step_path))
+            #         except:
+            #             file.write('Error while reading vasprun ! Output energy above hull set to 100 \n')
+            #             file.write('Probably an error during scf. Check input file for BO step {0}\n'.format(self.bo_step))
+            #             file.write(
+            #                 '{0} {1}/{2} ({4}) {3} -error {5}\n'.format(self.workdir, self.bo_step, self.maxbo, 100,
+            #                                                             self.initbo, input_vector))
+            #             outf.write('{0} {1}/{2} ({4}) {3} -error {5}\n'.format(self.workdir, self.bo_step, self.maxbo, 100,
+            #                                                                 self.initbo, input_vector))
+            #             file.flush()
+            #             outf.flush()
+            #             outf.close()
+            #             return 100
+
+            #         file.write('after vasprun\n')
+            #         file.flush()
+            #         if vasprun.converged_electronic:
+            #             file.write('Electronic step convergence has been reached in the final ionic step\n')
+            #         else:
+            #             file.write('Electronic step convergence has not been reached in the final ionic step\n')
+
+            #         energy = vasprun.final_energy
+            #         file.write('{0} {1}/{2} ({4}) {3} {5}\n'.format(self.workdir, self.bo_step, self.maxbo, energy,
+            #                                                         self.initbo, input_vector))
+            #         outf.write(
+            #             '{0} {1}/{2} ({4}) {3} {5}\n'.format(self.workdir, self.bo_step, self.maxbo, energy, self.initbo,
+            #                                                 input_vector))
+            #         file.flush()
+            #         outf.flush()
+            #         outf.close()
+            #         return energy
+            #     else:
+            #         return 0
+            # else:
+            #     file.write(
+            #         '{0} {1}/{2} ({4}) {3} {5}\n'.format(self.workdir, self.bo_step, self.maxbo, self.bo_step,
+            #                                              self.initbo, input_vector))
+            #     outf.write(
+            #         '{0} {1}/{2} ({4}) {3} {5}\n'.format(self.workdir, self.bo_step, self.maxbo, self.bo_step,
+            #                                              self.initbo, input_vector))
+            #     file.write('Output energy: {0}\n'.format(self.bo_step))
+            #     file.flush()
+            #     outf.flush()
+            #     outf.close()
+            #     return self.bo_step
+
+
+    def opt_slab(self):
+
+        #wf = get_wf_slab(self.slab_structure, db_file='/home/f-gimbert/atomate/config/db.json')
+        lpad = LaunchPad.auto_load()
+
+        db_file='/home/f-gimbert/atomate/config/db.json'
+
+        fw = OptimizeFW(structure=self.slab_structure, db_file=db_file)
+
+        wf = Workflow([fw],name=' Slab Optimization from {0}'.format(self.workdir))
+        new_wf = add_additional_fields_to_taskdocs(wf, {"system":"surface"})
+        #new_wf = add_tags(wf, ['surface'])
+        lpad.add_wf(new_wf)
+
+        os.system('qlaunch singleshot')
+
+    def test_fw(self):
+
+
+        # Note that you must provide your own API Key, which can
+        # be accessed via the Dashboard at materialsproject.org
+        mpr = MPRester('4oBTKz0pkFSg9EUQ')
+
+            
+        lpad = LaunchPad.auto_load()
+        #lpad.reset('', require_password=False)
+
+            
+        struct = mpr.get_structure_by_material_id("mp-23") # fcc Ni
+        struct = SpacegroupAnalyzer(struct).get_conventional_standard_structure()
+        slabs = generate_all_slabs(struct, 1, 5.0, 2.0, center_slab=True)
+        slab_dict = {slab.miller_index:slab for slab in slabs}
+
+        ni_slab_111 = slab_dict[(1, 1, 1)]
+        print(type(ni_slab_111))
+        #print(ni_slab_111)
+
+        db_file='/home/f-gimbert/atomate/config/db.json'
+
+        fw = StaticFW(structure=ni_slab_111, db_file=db_file)
+
+        wf = Workflow([fw],name=' Slab static wf from {0}'.format(self.workdir))
+            #wf = wf_static(ni_slab_111)
+            #wf = get_wf_slab(ni_slab_111, db_file='/home/f-gimbert/atomate/config/db.json')
+            #new_wf = add_additional_fields_to_taskdocs(wf, {"system":"surface"})
+            #new_wf = add_tags(wf, ['surface'])
+        lpad.add_wf(wf)
+
+        import subprocess
+        cmd = 'qlaunch singleshot'
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+        (output, err) = p.communicate()
+
+        #print(output)
+        id_job = output.decode('utf-8').split()
+        
+        print(' ### Id job : ', id_job[-1], ' ####')
+        #os.system('qlaunch singleshot')
+
+
 
 
 def main(argv):
 
-    lpad = LaunchPad.auto_load()
-    
-    password = None
-    passphrase = None
+    #lpad = LaunchPad.auto_load()
 
     opts, args = getopt.getopt(argv, ":", ["workdir=", "maxbo=", "initbo=", "x=", "y="])
 
@@ -609,7 +659,7 @@ def main(argv):
         elif opt == "--y":
             y = arg
 
-    bayesopt = Bayesopt(password, passphrase, workdir, maxbo, initbo, x, y)
+    bayesopt = Bayesopt(workdir, maxbo, initbo, x, y)
 
 
 if __name__ == "__main__":
